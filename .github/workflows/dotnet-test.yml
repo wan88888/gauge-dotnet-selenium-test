@@ -1,0 +1,56 @@
+name: .NET Selenium Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # 允许手动触发工作流
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '8.0.x'
+        
+    - name: Restore dependencies
+      run: dotnet restore
+      
+    - name: Build
+      run: dotnet build --no-restore
+      
+    - name: Install Gauge
+      run: |
+        curl -SsL https://downloads.gauge.org/stable | sh
+        gauge --version
+        gauge install dotnet
+        gauge install html-report
+        gauge install screenshot
+        gauge telemetry off
+        
+    - name: Setup Chrome
+      uses: browser-actions/setup-chrome@latest
+      
+    # 运行冒烟测试
+    - name: Run Smoke Tests
+      run: |
+        export GAUGE_PROJECT_ROOT=$GITHUB_WORKSPACE
+        export GAUGE_CSHARP_PROJECT_FILE=WebAutomation.csproj
+        gauge run --tags "smoke" specs -v || true
+        
+    # 上传冒烟测试报告
+    - name: Upload Smoke Test Reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: smoke-test-reports
+        path: |
+          reports/
+          logs/
+        retention-days: 5
